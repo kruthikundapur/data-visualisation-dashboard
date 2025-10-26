@@ -1,0 +1,214 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+
+const Datasets = () => {
+  const [datasets, setDatasets] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    file: null
+  });
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchDatasets();
+  }, []);
+
+  const fetchDatasets = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get('http://localhost:8000/datasets');
+      setDatasets(response.data);
+    } catch (error) {
+      console.error('Error fetching datasets:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData({
+        ...formData,
+        file: file,
+        name: formData.name || file.name.split('.')[0]
+      });
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.file) {
+      alert('Please select a file');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', formData.file);
+      uploadFormData.append('name', formData.name);
+      uploadFormData.append('description', formData.description);
+
+      const response = await axios.post('http://localhost:8000/datasets/upload', uploadFormData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      setFormData({ name: '', description: '', file: null });
+      setShowUploadForm(false);
+      fetchDatasets();
+      navigate(`/dataset/${response.data.id}`);
+    } catch (error) {
+      console.error('Error uploading dataset:', error);
+      alert(error.response?.data?.detail || 'Failed to upload dataset');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  return (
+    <div className="p-6">
+      <div className="mb-6 flex justify-between items-center">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Datasets
+        </h1>
+        <button
+          onClick={() => setShowUploadForm(!showUploadForm)}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+        >
+          {showUploadForm ? 'Cancel' : 'Upload Dataset'}
+        </button>
+      </div>
+
+      {showUploadForm && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            Upload New Dataset
+          </h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Dataset Name
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                placeholder="Enter dataset name"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Description (Optional)
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+                placeholder="Enter description"
+                rows="3"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                File (CSV or Excel)
+              </label>
+              <input
+                type="file"
+                required
+                accept=".csv,.xlsx,.xls"
+                onChange={handleFileChange}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={uploading}
+              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 dark:bg-blue-500 dark:hover:bg-blue-600"
+            >
+              {uploading ? 'Uploading...' : 'Upload'}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+          Loading datasets...
+        </div>
+      ) : datasets.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-gray-500 dark:text-gray-400 mb-4">
+            No datasets uploaded yet
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {datasets.map((dataset) => (
+            <div
+              key={dataset.id}
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow cursor-pointer"
+              onClick={() => navigate(`/dataset/${dataset.id}`)}
+            >
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                {dataset.name}
+              </h3>
+              {dataset.description && (
+                <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
+                  {dataset.description}
+                </p>
+              )}
+              <div className="space-y-2 text-sm text-gray-500 dark:text-gray-400">
+                <div className="flex justify-between">
+                  <span>File:</span>
+                  <span className="font-medium">{dataset.file_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Size:</span>
+                  <span className="font-medium">{formatFileSize(dataset.file_size)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Uploaded:</span>
+                  <span className="font-medium">{formatDate(dataset.created_at)}</span>
+                </div>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/dataset/${dataset.id}`);
+                }}
+                className="mt-4 w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+              >
+                View Dataset
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Datasets;
+
